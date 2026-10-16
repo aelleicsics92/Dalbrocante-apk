@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+}
+
+base.archivesName = "DalBrocante"
+
+android {
+    namespace 'it.dalbrocante.gestionale'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "it.dalbrocante.gestionale"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        shared {
+            storeFile file('dalbrocante.keystore')
+            storePassword 'dalbrocante'
+            keyAlias 'dalbrocante'
+            keyPassword 'dalbrocante'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.shared
+        }
+        release {
+            signingConfig signingConfigs.shared
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
