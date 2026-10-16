@@ -33,28 +33,98 @@
     }
   }
 
-  /* ── Tabelle a schede (Provenienza / Listino): etichette per cella ── */
+  /* ── Tabelle: etichette, schede, categoria sotto il nome ── */
+  var PATH = location.pathname;
   function labelTables() {
     var tbs = document.querySelectorAll('table');
     for (var i = 0; i < tbs.length; i++) {
       var tb = tbs[i];
+      if (tb.id === 'tabellaClienti' || tb.classList.contains('fermate')) continue;
       var ths = tb.querySelectorAll('thead th');
       var txt = '';
       var labels = [];
-      for (var j = 0; j < ths.length; j++) { labels.push((ths[j].textContent || '').trim()); txt += ' ' + labels[j]; }
-      if (!/Provenienza/i.test(txt)) continue;
-      tb.classList.add('app-card');
+      for (var j = 0; j < ths.length; j++) { labels.push((ths[j].textContent || '').replace(/[▶◀]/g, '').trim()); txt += ' ' + labels[j]; }
+      var mode = null;
+      if (/Provenienza/i.test(txt)) mode = 'app-card';
+      else if (/Nome Articolo/i.test(txt)) mode = 'art';
+      else if (/magazzino/.test(PATH)) mode = null;
+      else if (ths.length >= 5 && tb.closest('.main,.main-content')) mode = 'app-list';
+      if (!mode) continue;
+      if (mode === 'art') {
+        var rr = tb.querySelectorAll('tbody tr.art-row');
+        for (var q = 0; q < rr.length; q++) {
+          var tn = rr[q].querySelector('td.td-nome');
+          var lnk = rr[q].querySelector('td.td-cat a');
+          if (tn && lnk && !tn.querySelector('.app-cat')) {
+            var d = document.createElement('span');
+            d.className = 'app-cat';
+            d.textContent = lnk.textContent;
+            tn.appendChild(d);
+          }
+        }
+        continue;
+      }
+      tb.classList.add(mode);
       var rows = tb.querySelectorAll('tbody tr');
       for (var r = 0; r < rows.length; r++) {
         var tds = rows[r].children;
         for (var k = 0; k < tds.length; k++) {
-          if (!tds[k].getAttribute('data-label') && labels[k]) tds[k].setAttribute('data-label', labels[k]);
+          var td = tds[k];
+          if (!td.getAttribute('data-label') && labels[k]) td.setAttribute('data-label', labels[k]);
+          if (mode === 'app-list') {
+            var t = (td.textContent || '').trim();
+            var hasCtl = td.querySelector('a,button,input');
+            if (!labels[k] && hasCtl) td.classList.add('app-act');
+            else if ((t === '' || t === '—' || t === '-') && !hasCtl && k > 0) td.classList.add('app-empty');
+            if (/total|importo|incass/i.test(labels[k] || '')) td.classList.add('app-tot');
+          }
         }
       }
     }
   }
 
-  function run() { upd(); labelTables(); }
+  /* ── Trasporti: elenco giornate = link al giro consegne ── */
+  function trasporti() {
+    if (!/trasporti\.php$/.test(PATH)) return;
+    var st = document.getElementById('app-tr');
+    if (!st) { st = document.createElement('style'); st.id = 'app-tr'; document.head.appendChild(st); }
+    st.textContent = '.page-title .btn-green{display:none!important;}.giornate-grid{grid-template-columns:1fr!important;}.giornata-card{border:2px solid #d1fae5!important;}.app-vai{margin-top:.6rem;display:flex;gap:.5rem;align-items:center;justify-content:space-between;}.app-vai b{background:#10b981;color:#fff;border-radius:10px;padding:.55rem .9rem;font-size:.9rem;}.app-vai button{background:#f1f5f9;border:1px solid #d1d5db;border-radius:10px;padding:.5rem .7rem;font-size:.8rem;color:#374151;}';
+    function wire() {
+      var cards = document.querySelectorAll('.giornata-card');
+      for (var i = 0; i < cards.length; i++) {
+        (function (c) {
+          if (c.getAttribute('data-app')) return;
+          var m = /apriGiornata\('([^']+)'\)/.exec(c.getAttribute('onclick') || '');
+          if (!m) return;
+          var date = m[1];
+          c.setAttribute('data-app', '1');
+          c.removeAttribute('onclick');
+          var body = c.querySelector('.card-body');
+          if (body) {
+            var bar = document.createElement('div');
+            bar.className = 'app-vai';
+            bar.innerHTML = '<b>🗺️ Apri giro consegne</b><button type="button">✏️ Modifica</button>';
+            bar.querySelector('button').onclick = function (e) {
+              e.stopPropagation();
+              if (window.apriGiornata) window.apriGiornata(date);
+            };
+            body.appendChild(bar);
+          }
+          c.onclick = function () {
+            fetch('trasporti.php', { method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: 'ajax=get_giornata&data=' + encodeURIComponent(date) })
+              .then(function (r) { return r.json(); })
+              .then(function (d) { if (d && d.ok && d.token) location.href = 'trasporti_view.php?token=' + d.token; });
+          };
+        })(cards[i]);
+      }
+    }
+    wire();
+    setTimeout(wire, 500);
+  }
+
+  function run() { upd(); labelTables(); trasporti(); }
   run();
   setTimeout(run, 300);
   setTimeout(run, 1200);
@@ -75,10 +145,10 @@
     '@media(max-width:1000px){',
 
     /* ── TOPBAR ── */
-    '#topbar.topbar{height:auto!important;left:0!important;right:0!important;flex-wrap:wrap!important;padding:.5rem .75rem!important;gap:.5rem!important;}',
-    '#searchMainWrap.search-main-wrap{flex:1 1 100%!important;max-width:none!important;width:100%!important;}',
-    '#searchDocWrap.search-doc-wrap{flex:1 1 0!important;min-width:0!important;max-width:none!important;width:auto!important;}',
-    '#taskWrapTop{flex:0 0 auto!important;}',
+    'html body #topbar.topbar{height:auto!important;left:0!important;right:0!important;flex-wrap:wrap!important;padding:.5rem .75rem!important;gap:.5rem!important;}',
+    'html body #searchMainWrap.search-main-wrap{flex:1 1 100%!important;max-width:none!important;width:100%!important;}',
+    'html body #searchDocWrap.search-doc-wrap{flex:1 1 0!important;min-width:0!important;max-width:none!important;width:auto!important;}',
+    'html body #taskWrapTop{flex:0 0 auto!important;}',
     '#taskDropTop{position:fixed!important;left:.5rem!important;right:.5rem!important;width:auto!important;top:var(--tb-h,100px)!important;}',
 
     /* ── Contenuto ── */
@@ -104,17 +174,17 @@
     /* ── ACQUISTATI cliente: tabella compatta stile magazzino ── */
     '.art-table-wrap{overflow:visible!important;max-height:none!important;}',
     '#tblArticoli:not(.app-card){width:100%!important;min-width:0!important;table-layout:auto!important;}',
-    '#tblArticoli:not(.app-card) th,#tblArticoli:not(.app-card) td{white-space:normal!important;padding:.4rem .25rem!important;font-size:.7rem!important;word-break:break-word;}',
-    '#tblArticoli:not(.app-card) th{position:static!important;}',
-    '#tblArticoli:not(.app-card) td.td-nome{max-width:none!important;min-width:0!important;overflow:visible!important;text-overflow:clip!important;font-weight:600;font-size:.76rem!important;}',
-    '#tblArticoli:not(.app-card) td.td-cat,#tblArticoli:not(.app-card) th.th-cat{width:auto!important;max-width:60px!important;}',
-    '#tblArticoli:not(.app-card) .cat-link{font-size:.6rem!important;white-space:normal;}',
+    '#tblArticoli:not(.app-card) th,#tblArticoli:not(.app-card) td{white-space:nowrap!important;padding:.4rem .25rem!important;font-size:.7rem!important;}',
+    '#tblArticoli:not(.app-card) th{position:static!important;font-size:.58rem!important;}',
+    '#tblArticoli:not(.app-card) td.td-nome{white-space:normal!important;word-break:break-word;max-width:none!important;min-width:90px!important;overflow:visible!important;text-overflow:clip!important;font-weight:600;font-size:.78rem!important;}',
+    '#tblArticoli:not(.app-card) .app-cat{display:block;margin-top:.2rem;font-size:.6rem;font-weight:600;color:#7c3aed;background:#f3e8ff;border-radius:99px;padding:.05rem .4rem;width:fit-content;white-space:normal;}',
+    '#tblArticoli:not(.app-card) .prezzo-acq,#tblArticoli:not(.app-card) .prezzo-vend{font-size:.74rem!important;white-space:nowrap!important;}',
     '#tblArticoli:not(.app-card) .codice-badge{font-size:.66rem!important;}',
     '#tblArticoli:not(.app-card) td.td-view:first-child span[title]{display:block;margin:0 0 .15rem!important;}',
     '#tblArticoli:not(.app-card) .act-icon{width:28px!important;height:28px!important;}',
     '#tblArticoli:not(.app-card) td:last-child>div{flex-direction:column!important;gap:.25rem!important;align-items:center;}',
     '#tblArticoli:not(.app-card) .td-edit{flex-direction:column!important;}',
-    /* colonne secondarie nascoste (tot acq, venduti, scorte, note, foto, data) */
+    '#tblArticoli:not(.app-card) th:nth-child(4),#tblArticoli:not(.app-card) td:nth-child(4),',
     '#tblArticoli:not(.app-card) th:nth-child(8),#tblArticoli:not(.app-card) td:nth-child(8),',
     '#tblArticoli:not(.app-card) th:nth-child(9),#tblArticoli:not(.app-card) td:nth-child(9),',
     '#tblArticoli:not(.app-card) th:nth-child(10),#tblArticoli:not(.app-card) td:nth-child(10),',
@@ -122,8 +192,9 @@
     '#tblArticoli:not(.app-card) th:nth-child(14),#tblArticoli:not(.app-card) td:nth-child(14),',
     '#tblArticoli:not(.app-card) th:nth-child(15),#tblArticoli:not(.app-card) td:nth-child(15){display:none!important;}',
     '#tblArticoli:not(.app-card) tfoot{display:none!important;}',
+    '#tblArticoli.has-editing:not(.app-card) th:nth-child(4),#tblArticoli.has-editing:not(.app-card) td:nth-child(4){display:table-cell!important;}',
+    '#tblArticoli.has-editing:not(.app-card) .app-cat{display:none!important;}',
     '#tblArticoli:not(.app-card) td input.inline-input{width:100%!important;min-width:0!important;font-size:14px!important;}',
-    '#tblArticoli:not(.app-card).has-editing th:nth-child(13),#tblArticoli:not(.app-card).has-editing td:nth-child(13){display:table-cell!important;}',
 
     /* ── Righe articoli (vendita / caparra): schede senza scroll ── */
     '.app-card,.app-card tbody{display:block!important;width:100%!important;min-width:0!important;max-width:none!important;overflow:visible!important;}',
@@ -141,6 +212,19 @@
     '.app-card td.td-del::before{display:none;}',
     '.app-card td input.ie{font-size:14px!important;min-width:0;}',
     '.app-card td .ie-wrap input{width:100%!important;}',
+
+    /* ── Elenchi (vendite, caparre, altri): schede a 2 colonne ── */
+    '.app-list,.app-list tbody{display:block!important;width:100%!important;min-width:0!important;max-width:none!important;overflow:visible!important;}',
+    '.app-list thead,.app-list tfoot{display:none!important;}',
+    '.app-list tr{display:grid!important;grid-template-columns:1fr 1fr;gap:.35rem .6rem;padding:.7rem .8rem;margin:0 0 .55rem;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.05);}',
+    '.app-list td{display:block!important;padding:0!important;border:0!important;background:transparent!important;text-align:left!important;white-space:normal!important;min-width:0;word-break:break-word;font-size:.88rem!important;color:#374151;}',
+    '.app-list td::before{content:attr(data-label);display:block;font-size:.6rem;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.3px;margin-bottom:.05rem;}',
+    '.app-list td:first-child{grid-column:1/3;font-size:1rem!important;font-weight:700;}',
+    '.app-list td:first-child::before{display:none;}',
+    '.app-list td.app-empty{display:none!important;}',
+    '.app-list td.app-act{grid-column:1/3;text-align:right!important;}',
+    '.app-list td.app-act::before{display:none;}',
+    '.app-list td.app-tot{font-weight:700;color:#059669;}',
 
     /* ── LISTA CLIENTI: schede ── */
     '.card-lista{padding:.25rem!important;background:transparent!important;box-shadow:none!important;}',

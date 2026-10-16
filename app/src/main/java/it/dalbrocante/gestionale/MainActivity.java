@@ -80,11 +80,11 @@ public class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextSize(16);
+        b.setTextSize(14);
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setMinHeight(0);
         b.setMinimumHeight(0);
-        b.setPadding(dp(20), dp(12), dp(20), dp(12));
+        b.setPadding(dp(14), dp(12), dp(14), dp(12));
         if (Build.VERSION.SDK_INT >= 21) b.setStateListAnimator(null);
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(dp(30));
@@ -133,7 +133,8 @@ public class MainActivity extends Activity {
         bar.setPadding(dp(12), dp(8), dp(12), dp(8));
 
         Button btnBack = makeButton("← Indietro", false);
-        Button btnHome = makeButton("🏠  Home", true);
+        Button btnHome = makeButton("🏠 Home", true);
+        Button btnTras = makeButton("🚛 Trasporti", false);
 
         LinearLayout.LayoutParams lpBack = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -142,6 +143,10 @@ public class MainActivity extends Activity {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         bar.addView(btnBack, lpBack);
         bar.addView(btnHome, lpHome);
+        LinearLayout.LayoutParams lpTras = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpTras.leftMargin = dp(10);
+        bar.addView(btnTras, lpTras);
         barWrap.addView(bar, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(barWrap, new LinearLayout.LayoutParams(
@@ -151,6 +156,12 @@ public class MainActivity extends Activity {
 
         btnHome.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { web.loadUrl(homeUrl()); }
+        });
+        btnTras.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                String folder = prefs.getString("folder", null);
+                if (folder != null) web.loadUrl(BASE + "/" + folder + "/trasporti.php");
+            }
         });
         btnBack.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
