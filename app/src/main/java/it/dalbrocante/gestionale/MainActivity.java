@@ -6,10 +6,15 @@ import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,45 +28,137 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.Toast;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
 
-    // Indirizzo di partenza (login centralizzato)
-    private static final String START_URL = "https://gestiscoio.it/login.php";
+    private static final String BASE = "https://gestiscoio.it";
+    private static final String START_URL = BASE + "/login.php";
     private static final String HOST = "gestiscoio.it";
     private static final int REQ_FILE = 1001;
+    // /dalbrocante/qualcosa.php  ->  cartella del negozio
+    private static final Pattern SHOP_PATH = Pattern.compile("^/([^/]+)/[^/]+\\.php$");
 
     private WebView web;
+    private LinearLayout barWrap;
     private ValueCallback<Uri[]> filePathCallback;
+    private String fixJs = "";
+    private SharedPreferences prefs;
 
-    // CSS di sicurezza per lo smartphone: azzera i margini della sidebar e rende scorrevoli le tabelle
-    private static final String FIX_JS =
-        "(function(){"
-        + "var m=document.querySelector('meta[name=viewport]');"
-        + "if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}"
-        + "m.content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';"
-        + "if(document.getElementById('app-fix'))return;"
-        + "var s=document.createElement('style');s.id='app-fix';"
-        + "s.textContent='html,body{max-width:100vw;overflow-x:hidden;-webkit-text-size-adjust:100%;}"
-        + "@media(max-width:900px){"
-        + ".main,.main-content{margin-left:0!important;padding-left:.75rem!important;padding-right:.75rem!important;max-width:100vw!important;box-sizing:border-box!important;}"
-        + ".main table,.main-content table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;}"
-        + "input,select,textarea{font-size:16px!important;max-width:100%;}"
-        + "[style*=\"grid-template-columns\"]{grid-template-columns:1fr!important;}"
-        + "}';"
-        + "document.head.appendChild(s);"
-        + "})();";
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private String loadAsset(String name) {
+        try {
+            InputStream in = getAssets().open(name);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            in.close();
+            return out.toString("UTF-8");
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String homeUrl() {
+        String folder = prefs.getString("folder", null);
+        if (folder == null) return START_URL;
+        return BASE + "/" + folder + "/dashboard.php";
+    }
+
+    private Button makeButton(String text, boolean primary) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setAllCaps(false);
+        b.setTextSize(16);
+        b.setTypeface(Typeface.DEFAULT_BOLD);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(dp(20), dp(12), dp(20), dp(12));
+        if (Build.VERSION.SDK_INT >= 21) b.setStateListAnimator(null);
+        GradientDrawable g = new GradientDrawable();
+        g.setCornerRadius(dp(30));
+        if (primary) {
+            g.setOrientation(GradientDrawable.Orientation.LEFT_RIGHT);
+            g.setColors(new int[]{Color.parseColor("#065f46"), Color.parseColor("#059669")});
+            b.setTextColor(Color.WHITE);
+        } else {
+            g.setColor(Color.WHITE);
+            g.setStroke(dp(2), Color.parseColor("#e5e7eb"));
+            b.setTextColor(Color.parseColor("#374151"));
+        }
+        b.setBackground(g);
+        return b;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        web = new WebView(this);
-        web.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        setContentView(web);
+        prefs = getSharedPreferences("app", MODE_PRIVATE);
+        fixJs = loadAsset("fix.js");
 
+        // ── Layout: web + barra in basso con Home ──
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.parseColor("#f8fafc"));
+
+        web = new WebView(this);
+        root.addView(web, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        barWrap = new LinearLayout(this);
+        barWrap.setOrientation(LinearLayout.VERTICAL);
+        barWrap.setBackgroundColor(Color.WHITE);
+        barWrap.setVisibility(View.GONE);
+
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.parseColor("#e5e7eb"));
+        barWrap.addView(divider, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
+
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER);
+        bar.setPadding(dp(12), dp(8), dp(12), dp(8));
+
+        Button btnBack = makeButton("← Indietro", false);
+        Button btnHome = makeButton("🏠  Home", true);
+
+        LinearLayout.LayoutParams lpBack = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lpBack.rightMargin = dp(10);
+        LinearLayout.LayoutParams lpHome = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        bar.addView(btnBack, lpBack);
+        bar.addView(btnHome, lpHome);
+        barWrap.addView(bar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(barWrap, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        setContentView(root);
+
+        btnHome.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { web.loadUrl(homeUrl()); }
+        });
+        btnBack.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (web.canGoBack()) web.goBack();
+            }
+        });
+
+        // ── WebView ──
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -85,9 +182,10 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
                 Uri u = req.getUrl();
                 String scheme = u.getScheme() == null ? "" : u.getScheme();
-                if ((scheme.equals("http") || scheme.equals("https")) && (u.getHost() != null && (u.getHost().equals(HOST) || u.getHost().endsWith("." + HOST)))) {
-                    return false;
-                }
+                String host = u.getHost();
+                boolean mine = (scheme.equals("http") || scheme.equals("https"))
+                        && host != null && (host.equals(HOST) || host.endsWith("." + HOST));
+                if (mine) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, u));
                 } catch (ActivityNotFoundException e) {
@@ -97,8 +195,14 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onPageStarted(WebView v, String url, android.graphics.Bitmap icon) {
+                updateBar(url);
+            }
+
+            @Override
             public void onPageFinished(WebView v, String url) {
-                v.evaluateJavascript(FIX_JS, null);
+                updateBar(url);
+                if (fixJs.length() > 0) v.evaluateJavascript(fixJs, null);
                 CookieManager.getInstance().flush();
             }
 
@@ -181,6 +285,22 @@ public class MainActivity extends Activity {
         } else {
             web.loadUrl(START_URL);
         }
+    }
+
+    // Mostra la barra Home solo dentro al gestionale (non nel login)
+    private void updateBar(String url) {
+        try {
+            Uri u = Uri.parse(url);
+            if (u.getHost() == null || !u.getHost().endsWith(HOST)) return;
+            String p = u.getPath() == null ? "" : u.getPath();
+            Matcher m = SHOP_PATH.matcher(p);
+            if (m.matches()) {
+                prefs.edit().putString("folder", m.group(1)).apply();
+                barWrap.setVisibility(View.VISIBLE);
+            } else if (p.equals("/login.php") || p.equals("/") || p.equals("")) {
+                barWrap.setVisibility(View.GONE);
+            }
+        } catch (Exception ignored) { }
     }
 
     @Override
