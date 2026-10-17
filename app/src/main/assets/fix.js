@@ -55,6 +55,13 @@
         for (var q = 0; q < rr.length; q++) {
           var tn = rr[q].querySelector('td.td-nome');
           var lnk = rr[q].querySelector('td.td-cat a');
+          var nt = rr[q].getAttribute('data-note');
+          if (tn && nt && !tn.querySelector('.app-note')) {
+            var n = document.createElement('div');
+            n.className = 'app-note';
+            n.textContent = '📝 ' + nt;
+            tn.appendChild(n);
+          }
           if (tn && lnk && !tn.querySelector('.app-cat')) {
             var d = document.createElement('span');
             d.className = 'app-cat';
@@ -178,6 +185,9 @@
     '#tblArticoli:not(.app-card) th{position:static!important;font-size:.58rem!important;}',
     '#tblArticoli:not(.app-card) td.td-nome{white-space:normal!important;word-break:break-word;max-width:none!important;min-width:90px!important;overflow:visible!important;text-overflow:clip!important;font-weight:600;font-size:.78rem!important;}',
     '#tblArticoli:not(.app-card) .app-cat{display:block;margin-top:.2rem;font-size:.6rem;font-weight:600;color:#7c3aed;background:#f3e8ff;border-radius:99px;padding:.05rem .4rem;width:fit-content;white-space:normal;}',
+    '#tblArticoli:not(.app-card) .app-note{font-size:.68rem;font-weight:400;color:#6b7280;margin-top:.25rem;white-space:normal;line-height:1.3;}',
+    '#tblArticoli.has-editing:not(.app-card) .app-note{display:none!important;}',
+    '#tblArticoli.has-editing:not(.app-card) th:nth-child(13),#tblArticoli.has-editing:not(.app-card) td:nth-child(13){display:table-cell!important;}',
     '#tblArticoli:not(.app-card) .prezzo-acq,#tblArticoli:not(.app-card) .prezzo-vend{font-size:.74rem!important;white-space:nowrap!important;}',
     '#tblArticoli:not(.app-card) .codice-badge{font-size:.66rem!important;}',
     '#tblArticoli:not(.app-card) td.td-view:first-child span[title]{display:block;margin:0 0 .15rem!important;}',
